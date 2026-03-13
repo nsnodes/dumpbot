@@ -1,0 +1,16 @@
+[project]
+name = "dumpbot"
+version = "0.1.0"
+description = "Telegram bot that collects links and comments for nsnodes digest pipeline"
+requires-python = ">=3.9"
+dependencies = [
+    "python-telegram-bot==21.3",
+    "python-dotenv==1.0.1",
+]
+
+[project.scripts]
+dumpbot = "dumpbot:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
