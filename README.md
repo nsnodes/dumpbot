@@ -12,6 +12,20 @@ A Telegram bot that collects links and comments from group chats to feed into th
 
 ## Setup
 
+### 1. Create Telegram Bot
+
+1. **Create bot with @BotFather:**
+   - Message @BotFather on Telegram
+   - Use `/newbot` and follow prompts
+   - Save the bot token
+
+2. **Add bot to group:**
+   - Create/use existing Telegram group
+   - Add your bot to the group
+   - Get the chat ID (use @userinfobot or check bot logs)
+
+### 2. Install and Configure
+
 1. **Install dependencies:**
    ```bash
    uv sync
@@ -27,6 +41,15 @@ A Telegram bot that collects links and comments from group chats to feed into th
    ```bash
    uv run dumpbot
    ```
+
+### 3. Production Deployment
+
+The bot should run on the nsnodes VPS with daily auto-export:
+
+```bash
+# Add to crontab for daily export at 23:00 UTC
+0 23 * * * /home/ubuntu/dumpbot/cron-daily-export.sh
+```
 
 ## Configuration
 
@@ -51,6 +74,17 @@ Collected data is stored as JSONL with entries containing:
 - `message_text` - Full message content
 - `urls` - Array of extracted URLs
 - `message_id` - Telegram message ID
+
+## Digest Pipeline Integration
+
+The bot integrates with the nsnodes digest pipeline:
+
+1. **VPS Operation**: Bot runs on nsnodes VPS, collects telegram data
+2. **Auto-Commit**: `/export` command creates `data/telegram-YYYY-MM-DD.json` and commits/pushes to GitHub
+3. **Digest Fetch**: GitHub Actions `fetch-weekly-data.sh` pulls committed data from dumpbot repo
+4. **Pipeline Processing**: Data flows into weekly digest generation
+
+The VPS commits data to GitHub, then digest workflow pulls it for processing.
 
 ## Deployment
 

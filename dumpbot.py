@@ -17,6 +17,7 @@ from telegram.ext import Application, CommandHandler, ContextTypes, MessageHandl
 from config import Config
 from data_store import DataStore
 from digest_integration import DigestIntegration
+from git_sync import GitSync
 
 
 logging.basicConfig(
@@ -35,6 +36,7 @@ class DumpBot:
         self.config = Config()
         self.data_store = DataStore(self.config.data_output_dir)
         self.digest = DigestIntegration()
+        self.git_sync = GitSync()
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Process incoming messages for links and comments."""
@@ -78,11 +80,30 @@ class DumpBot:
         )
 
     async def export_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
-        """Export collected data to digest pipeline."""
+        """Export collected data and commit to repository."""
         try:
+            all_entries = self.data_store.get_all_entries()
+
+            # Export today's data for digest pipeline
+            today = datetime.now().strftime('%Y-%m-%d')
+            export_file = self.digest.export_daily_data(all_entries, today)
+
+            # Commit and push to repository
+            commit_success = self.git_sync.commit_daily_data([export_file], today)
+
             stats = self.data_store.get_stats()
-            export_file = self.digest.export_to_digest(stats)
-            await update.message.reply_text(f"✅ Exported data to digest pipeline: {export_file}")
+
+            if commit_success:
+                await update.message.reply_text(
+                    f"✅ Exported and committed: {export_file}\n"
+                    f"📊 {stats['total_entries']} messages, {stats['total_urls']} URLs\n"
+                    f"🔄 Pushed to GitHub for digest pipeline"
+                )
+            else:
+                await update.message.reply_text(
+                    f"⚠️ Exported but commit failed: {export_file}\n"
+                    f"📊 {stats['total_entries']} messages, {stats['total_urls']} URLs"
+                )
         except Exception as e:
             await update.message.reply_text(f"❌ Export failed: {str(e)}")
 

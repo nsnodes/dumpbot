@@ -4,9 +4,12 @@ __pycache__/
 *$py.class
 *.so
 .Python
-data/
 logs/
 *.db
 *.sqlite3
 venv/
 .venv/
+
+# Keep data directory for committed telegram exports
+!data/
+data/*.jsonl
