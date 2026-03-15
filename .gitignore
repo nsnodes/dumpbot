@@ -12,4 +12,4 @@ venv/
 
 # Keep data directory for committed telegram exports
 !data/
-data/*.jsonl
+data/*.jsonl\!data/entries.jsonl
