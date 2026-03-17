@@ -5,6 +5,8 @@ A Telegram bot that collects links and comments from group chats to feed into th
 ## Features
 
 - Automatic link detection and collection from Telegram messages
+- **@claude directives** - Send instructions to the digest with `@claude [instruction]`
+- **Reply thread tracking** - Replies to link messages are captured as conversation threads
 - JSON-based data persistence
 - Export functionality for digest pipeline integration
 - Simple command interface (`/start`, `/stats`, `/export`)
@@ -44,12 +46,29 @@ A Telegram bot that collects links and comments from group chats to feed into th
 
 ### 3. Production Deployment
 
-The bot should run on the nsnodes VPS with daily auto-export:
+Initial deployment to nsnodes VPS:
 
 ```bash
-# Add to crontab for daily export at 23:00 UTC
-0 23 * * * /home/ubuntu/dumpbot/cron-daily-export.sh
+# First time setup
+ssh nsnodes
+git clone https://github.com/nsnodes/dumpbot.git ~/dumpbot
+cd ~/dumpbot
+uv sync
+cp .env.example .env
+# Edit .env with bot token and chat ID
+
+# Set up systemd service
+sudo cp systemd/dumpbot.service /etc/systemd/system/
+sudo systemctl daemon-reload
+sudo systemctl enable dumpbot
+sudo systemctl start dumpbot
+
+# Add daily export cron
+crontab -e
+# Add: 0 23 * * * /home/ubuntu/dumpbot/cron-daily-export.sh
 ```
+
+Subsequent updates use `./deploy.sh` which pulls latest changes.
 
 ## Configuration
 
@@ -67,12 +86,24 @@ Set these environment variables in `.env`:
 
 ## Data Format
 
-Collected data is stored as JSONL with entries containing:
+Collected data is stored as JSONL with different entry types:
+
+### Link Entries
+- `type: 'link'`
 - `timestamp` - ISO format timestamp
 - `user_id` - Telegram user ID
 - `username` - Telegram username
 - `message_text` - Full message content
 - `urls` - Array of extracted URLs
+- `message_id` - Telegram message ID
+- `thread` - Array of replies to this link message
+
+### Directive Entries
+- `type: 'directive'`
+- `timestamp` - ISO format timestamp
+- `user_id` - Telegram user ID
+- `username` - Telegram username
+- `instruction` - The directive text (without @claude prefix)
 - `message_id` - Telegram message ID
 
 ## Digest Pipeline Integration
