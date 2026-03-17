@@ -37,6 +37,18 @@ class DumpBot:
         self.data_store = DataStore(self.config.data_output_dir)
         self.digest = DigestIntegration()
         self.git_sync = GitSync()
+        # Track messages with links to build threads
+        self.link_messages = {}  # message_id -> entry dict
+        self._load_existing_link_messages()
+
+    def _load_existing_link_messages(self):
+        """Load existing link messages on startup to track threads."""
+        entries = self.data_store.get_all_entries()
+        for entry in entries:
+            if entry.get('type') == 'link' or ('urls' in entry and 'type' not in entry):
+                message_id = entry.get('message_id')
+                if message_id:
+                    self.link_messages[message_id] = entry
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Process incoming messages for links and comments."""
@@ -49,19 +61,63 @@ class DumpBot:
         if str(update.effective_chat.id) != self.config.chat_id:
             return
 
+        # Handle @claude directives for digest instructions
+        if message.text.startswith('@claude'):
+            entry = {
+                'type': 'directive',
+                'timestamp': datetime.now().isoformat(),
+                'user_id': update.effective_user.id,
+                'username': update.effective_user.username or 'Unknown',
+                'instruction': message.text[7:].strip(),  # Remove @claude prefix
+                'message_id': message.message_id
+            }
+
+            self.data_store.save_entry(entry)
+            logger.info(f"Saved directive from {entry['username']}: {entry['instruction'][:50]}...")
+            return
+
+        # Check if this is a reply to a message with links
+        if message.reply_to_message:
+            reply_to_id = message.reply_to_message.message_id
+            if reply_to_id in self.link_messages:
+                # This is a reply to a link message, add it to the thread
+                parent_entry = self.link_messages[reply_to_id]
+
+                # Initialize thread if not exists
+                if 'thread' not in parent_entry:
+                    parent_entry['thread'] = []
+
+                # Add this reply to the thread
+                parent_entry['thread'].append({
+                    'timestamp': datetime.now().isoformat(),
+                    'user_id': update.effective_user.id,
+                    'username': update.effective_user.username or 'Unknown',
+                    'message_text': message.text,
+                    'message_id': message.message_id
+                })
+
+                # Update the stored entry
+                self.data_store.update_entry(parent_entry)
+                logger.info(f"Added reply from {update.effective_user.username} to thread")
+                return
+
         urls = URL_PATTERN.findall(message.text)
 
         if urls:
             entry = {
+                'type': 'link',
                 'timestamp': datetime.now().isoformat(),
                 'user_id': update.effective_user.id,
                 'username': update.effective_user.username or 'Unknown',
                 'message_text': message.text,
                 'urls': list(set(urls)),  # Remove duplicates
-                'message_id': message.message_id
+                'message_id': message.message_id,
+                'thread': []  # Initialize empty thread for potential replies
             }
 
             self.data_store.save_entry(entry)
+            # Track this message for potential replies
+            self.link_messages[message.message_id] = entry
 
             logger.info(f"Saved {len(urls)} URLs from {entry['username']}")
 
@@ -75,7 +131,8 @@ class DumpBot:
         await update.message.reply_text(
             f"📊 Stats:\n"
             f"• Total entries: {stats['total_entries']}\n"
-            f"• Total URLs: {stats['total_urls']}\n"
+            f"• Links collected: {stats['total_urls']}\n"
+            f"• Directives: {stats.get('total_directives', 0)}\n"
             f"• Last updated: {stats['last_updated']}"
         )
 

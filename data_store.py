@@ -25,6 +25,39 @@ class DataStore:
         except Exception as e:
             logger.error(f"Failed to save entry: {e}")
 
+    def update_entry(self, updated_entry: Dict[str, Any]) -> None:
+        """Update an existing entry by message_id."""
+        if not self.entries_file.exists():
+            return
+
+        entries = []
+        try:
+            # Read all entries
+            with open(self.entries_file, 'r', encoding='utf-8') as f:
+                for line in f:
+                    if line.strip():
+                        entries.append(json.loads(line))
+
+            # Find and update the entry
+            updated = False
+            for i, entry in enumerate(entries):
+                if entry.get('message_id') == updated_entry.get('message_id'):
+                    entries[i] = updated_entry
+                    updated = True
+                    break
+
+            if updated:
+                # Rewrite the entire file
+                with open(self.entries_file, 'w', encoding='utf-8') as f:
+                    for entry in entries:
+                        f.write(json.dumps(entry, ensure_ascii=False) + '\n')
+                logger.info(f"Updated entry with message_id: {updated_entry.get('message_id')}")
+            else:
+                logger.warning(f"Entry with message_id {updated_entry.get('message_id')} not found")
+
+        except Exception as e:
+            logger.error(f"Failed to update entry: {e}")
+
     def get_all_entries(self) -> List[Dict[str, Any]]:
         """Retrieve all stored entries."""
         if not self.entries_file.exists():
@@ -44,7 +77,15 @@ class DataStore:
     def get_stats(self) -> Dict[str, Any]:
         """Get statistics about the collected data."""
         entries = self.get_all_entries()
-        total_urls = sum(len(entry.get('urls', [])) for entry in entries)
+
+        # Count different entry types
+        link_entries = [e for e in entries if e.get('type') == 'link']
+        directive_entries = [e for e in entries if e.get('type') == 'directive']
+        # Legacy entries without type field are assumed to be links
+        legacy_entries = [e for e in entries if 'type' not in e and 'urls' in e]
+
+        total_urls = sum(len(entry.get('urls', [])) for entry in link_entries + legacy_entries)
+        total_directives = len(directive_entries)
 
         last_updated = 'Never'
         if entries:
@@ -54,6 +95,7 @@ class DataStore:
         return {
             'total_entries': len(entries),
             'total_urls': total_urls,
+            'total_directives': total_directives,
             'last_updated': last_updated
         }
 
