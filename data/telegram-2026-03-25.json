@@ -1,0 +1,29 @@
+{
+  "source": "telegram_dumpbot",
+  "date": "2026-03-25",
+  "collected_at": "2026-03-25T23:00:02.045405",
+  "total_messages": 2,
+  "total_urls": 2,
+  "entries": [
+    {
+      "timestamp": "2026-03-25T10:57:14.006314",
+      "user_id": 522541735,
+      "username": "ericbelarbre",
+      "message_text": "https://x.com/praxisnation/status/2036516300197957960",
+      "urls": [
+        "https://x.com/praxisnation/status/2036516300197957960"
+      ],
+      "message_id": 11
+    },
+    {
+      "timestamp": "2026-03-25T10:58:53.230347",
+      "user_id": 522541735,
+      "username": "ericbelarbre",
+      "message_text": "https://x.com/AlexDVoss/status/2034789898478080373\nFinally something about Veritas villages ^^",
+      "urls": [
+        "https://x.com/AlexDVoss/status/2034789898478080373"
+      ],
+      "message_id": 12
+    }
+  ]
+}
