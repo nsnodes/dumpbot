@@ -53,14 +53,17 @@ class GitSync:
 
             logger.info(f"Committed telegram data for {date}")
 
-            # Pull latest changes first to avoid conflicts
-            result = subprocess.run(["git", "pull", "--rebase", "origin", "main"],
-                                  capture_output=True, text=True)
-            
+            # Pull latest changes first to avoid conflicts.
+            # --autostash so any unrelated working-tree changes (e.g. the live
+            # entries.jsonl mid-write, ignored or not) don't abort the rebase.
+            result = subprocess.run(
+                ["git", "pull", "--rebase", "--autostash", "origin", "main"],
+                capture_output=True, text=True)
+
             if result.returncode != 0:
                 logger.error(f"Pull failed: {result.stderr}")
                 return False
-            
+
             logger.info("Pulled latest changes from origin")
 
             # Push to origin
