@@ -10,6 +10,12 @@ logs/
 venv/
 .venv/
 
-# Keep data directory for committed telegram exports
-!data/
-data/*.jsonl\!data/entries.jsonl
+# Local data store — written constantly by the bot
+data/entries.jsonl
+data/daily-export.log
+
+# Stray local artifacts
+bot.log
+debug.log
+*.bak
+daily_export_fixed.py
