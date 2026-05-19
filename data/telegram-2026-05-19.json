@@ -1,0 +1,21 @@
+{
+  "source": "telegram_dumpbot",
+  "date": "2026-05-19",
+  "collected_at": "2026-05-19T23:00:01.548380",
+  "total_messages": 1,
+  "total_urls": 1,
+  "entries": [
+    {
+      "type": "link",
+      "timestamp": "2026-05-19T13:37:25.246716",
+      "user_id": 1566198822,
+      "username": "RevDevSev",
+      "message_text": "https://x.com/farhaj/status/2056416465147089351/video/1?s=46",
+      "urls": [
+        "https://x.com/farhaj/status/2056416465147089351/video/1?s=46"
+      ],
+      "message_id": 16,
+      "thread": []
+    }
+  ]
+}
