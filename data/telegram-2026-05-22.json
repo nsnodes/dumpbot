@@ -1,0 +1,21 @@
+{
+  "source": "telegram_dumpbot",
+  "date": "2026-05-22",
+  "collected_at": "2026-05-22T23:00:01.599386",
+  "total_messages": 1,
+  "total_urls": 1,
+  "entries": [
+    {
+      "type": "link",
+      "timestamp": "2026-05-22T03:05:54.006254",
+      "user_id": 522541735,
+      "username": "ericbelarbre",
+      "message_text": "https://x.com/ivan_nomadz/status/2057464776205472110?s=46",
+      "urls": [
+        "https://x.com/ivan_nomadz/status/2057464776205472110?s=46"
+      ],
+      "message_id": 17,
+      "thread": []
+    }
+  ]
+}
