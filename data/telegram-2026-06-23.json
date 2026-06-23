@@ -1,0 +1,21 @@
+{
+  "source": "telegram_dumpbot",
+  "date": "2026-06-23",
+  "collected_at": "2026-06-23T23:00:01.335185",
+  "total_messages": 1,
+  "total_urls": 1,
+  "entries": [
+    {
+      "type": "link",
+      "timestamp": "2026-06-23T05:55:32.724512",
+      "user_id": 522541735,
+      "username": "ericbelarbre",
+      "message_text": "https://x.com/i/status/2069283102988624290",
+      "urls": [
+        "https://x.com/i/status/2069283102988624290"
+      ],
+      "message_id": 41,
+      "thread": []
+    }
+  ]
+}
