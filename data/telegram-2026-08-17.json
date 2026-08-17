@@ -1,0 +1,21 @@
+{
+  "source": "telegram_dumpbot",
+  "date": "2026-08-17",
+  "collected_at": "2026-08-17T23:00:02.169210",
+  "total_messages": 1,
+  "total_urls": 1,
+  "entries": [
+    {
+      "type": "link",
+      "timestamp": "2026-08-17T11:32:49.665703",
+      "user_id": 522541735,
+      "username": "ericbelarbre",
+      "message_text": "https://luma.com/zrjod2hx",
+      "urls": [
+        "https://luma.com/zrjod2hx"
+      ],
+      "message_id": 110,
+      "thread": []
+    }
+  ]
+}
