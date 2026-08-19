@@ -1,0 +1,21 @@
+{
+  "source": "telegram_dumpbot",
+  "date": "2026-08-19",
+  "collected_at": "2026-08-19T23:00:01.626812",
+  "total_messages": 1,
+  "total_urls": 1,
+  "entries": [
+    {
+      "type": "link",
+      "timestamp": "2026-08-19T03:07:12.441407",
+      "user_id": 522541735,
+      "username": "ericbelarbre",
+      "message_text": "https://www.buildersnode.com\nI've got the founder Taras asking me to promote them ... I guess it can't hurt, it's aligned 🙄",
+      "urls": [
+        "https://www.buildersnode.com"
+      ],
+      "message_id": 112,
+      "thread": []
+    }
+  ]
+}
