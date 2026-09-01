@@ -2,6 +2,7 @@
 """Test script to verify bot functionality without Telegram connection."""
 
 import json
+import logging
 import tempfile
 from pathlib import Path
 
@@ -121,10 +122,20 @@ def test_url_pattern():
     print("✅ URL pattern tests passed")
 
 
+def test_http_transport_logging_does_not_expose_bot_token():
+    import dumpbot  # noqa: F401
+
+    assert logging.getLogger("httpx").getEffectiveLevel() >= logging.WARNING
+    assert logging.getLogger("httpcore").getEffectiveLevel() >= logging.WARNING
+
+    print("✅ HTTP transport logging is credential-safe")
+
+
 if __name__ == '__main__':
     print("Running DumpBot tests...")
     test_data_store()
     test_digest_integration()
     test_git_sync()
     test_url_pattern()
+    test_http_transport_logging_does_not_expose_bot_token()
     print("🎉 All tests passed! Bot is ready to deploy.")

@@ -24,6 +24,10 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
+# python-telegram-bot's HTTP transport logs request URLs at INFO. Telegram puts
+# the bot credential in that URL, so those records must never reach journald.
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 logger = logging.getLogger(__name__)
 
 URL_PATTERN = re.compile(
