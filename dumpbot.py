@@ -7,7 +7,7 @@ for the nsnodes digest pipeline.
 import json
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -39,11 +39,37 @@ class DumpBot:
     def __init__(self):
         self.config = Config()
         self.data_store = DataStore(self.config.data_output_dir)
-        self.digest = DigestIntegration()
+        self.digest = DigestIntegration(self.config.data_output_dir)
         self.git_sync = GitSync()
         # Track messages with links to build threads
-        self.link_messages = {}  # message_id -> entry dict
+        self.link_messages = {}  # (chat_id, topic_id, message_id) -> entry dict
         self._load_existing_link_messages()
+
+    @staticmethod
+    def _message_key(message, chat_id=None):
+        message_chat = getattr(message, 'chat', None)
+        return (
+            chat_id if chat_id is not None else getattr(message_chat, 'id', None),
+            getattr(message, 'message_thread_id', None),
+            message.message_id,
+        )
+
+    def _matches_source(self, update: Update) -> bool:
+        """Accept only the configured chat and, when set, exact forum topic."""
+        message = update.effective_message
+        chat = update.effective_chat
+        if message is None or chat is None or str(chat.id) != self.config.chat_id:
+            return False
+        if self.config.topic_id is None:
+            return True
+        return message.message_thread_id == self.config.topic_id
+
+    @staticmethod
+    def _timestamp(message) -> str:
+        timestamp = getattr(message, 'date', None)
+        if timestamp and timestamp.tzinfo is not None:
+            timestamp = timestamp.astimezone(timezone.utc).replace(tzinfo=None)
+        return timestamp.isoformat() if timestamp else datetime.now().isoformat()
 
     def _load_existing_link_messages(self):
         """Load existing link messages on startup to track threads."""
@@ -52,7 +78,13 @@ class DumpBot:
             if entry.get('type') == 'link' or ('urls' in entry and 'type' not in entry):
                 message_id = entry.get('message_id')
                 if message_id:
-                    self.link_messages[message_id] = entry
+                    configured_chat_id = int(self.config.chat_id)
+                    key = (
+                        entry.get('chat_id', configured_chat_id),
+                        entry.get('message_thread_id', self.config.topic_id),
+                        message_id,
+                    )
+                    self.link_messages[key] = entry
 
     async def handle_message(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Process incoming messages for links and comments."""
@@ -61,44 +93,60 @@ class DumpBot:
         if not message or not message.text:
             return
 
-        # Only process messages from the configured chat
-        if str(update.effective_chat.id) != self.config.chat_id:
+        if not self._matches_source(update):
             return
+
+        chat_id = update.effective_chat.id
+        topic_id = message.message_thread_id
+        message_key = self._message_key(message, chat_id)
+        base = {
+            'timestamp': self._timestamp(message),
+            'chat_id': chat_id,
+            'message_thread_id': topic_id,
+            'user_id': update.effective_user.id,
+            'username': update.effective_user.username or 'Unknown',
+            'message_id': message.message_id,
+        }
+        if getattr(message, 'edit_date', None):
+            base['edited_at'] = message.edit_date.isoformat()
 
         # Handle @claude directives for digest instructions
         if message.text.startswith('@claude'):
-            entry = {
+            entry = base | {
                 'type': 'directive',
-                'timestamp': datetime.now().isoformat(),
-                'user_id': update.effective_user.id,
-                'username': update.effective_user.username or 'Unknown',
                 'instruction': message.text[7:].strip(),  # Remove @claude prefix
-                'message_id': message.message_id
             }
 
-            self.data_store.save_entry(entry)
+            self.data_store.upsert_entry(entry)
+            self.link_messages.pop(message_key, None)
             logger.info(f"Saved directive from {entry['username']}: {entry['instruction'][:50]}...")
             return
 
         # Check if this is a reply to a message with links
         if message.reply_to_message:
-            reply_to_id = message.reply_to_message.message_id
-            if reply_to_id in self.link_messages:
+            reply_key = self._message_key(message.reply_to_message, chat_id)
+            if reply_key in self.link_messages:
                 # This is a reply to a link message, add it to the thread
-                parent_entry = self.link_messages[reply_to_id]
+                parent_entry = self.link_messages[reply_key]
 
                 # Initialize thread if not exists
                 if 'thread' not in parent_entry:
                     parent_entry['thread'] = []
 
                 # Add this reply to the thread
-                parent_entry['thread'].append({
-                    'timestamp': datetime.now().isoformat(),
-                    'user_id': update.effective_user.id,
-                    'username': update.effective_user.username or 'Unknown',
+                reply_entry = base | {
                     'message_text': message.text,
-                    'message_id': message.message_id
-                })
+                }
+                reply_matches = [
+                    index for index, reply in enumerate(parent_entry['thread'])
+                    if DataStore.entry_key(reply) == message_key
+                ]
+                if reply_matches:
+                    parent_entry['thread'][reply_matches[0]] = reply_entry
+                    for index in reversed(reply_matches[1:]):
+                        del parent_entry['thread'][index]
+                else:
+                    parent_entry['thread'].append(reply_entry)
 
                 # Update the stored entry
                 self.data_store.update_entry(parent_entry)
@@ -108,29 +156,40 @@ class DumpBot:
         urls = URL_PATTERN.findall(message.text)
 
         if urls:
-            entry = {
+            entry = base | {
                 'type': 'link',
-                'timestamp': datetime.now().isoformat(),
-                'user_id': update.effective_user.id,
-                'username': update.effective_user.username or 'Unknown',
                 'message_text': message.text,
-                'urls': list(set(urls)),  # Remove duplicates
-                'message_id': message.message_id,
+                'urls': list(dict.fromkeys(urls)),
                 'thread': []  # Initialize empty thread for potential replies
             }
 
-            self.data_store.save_entry(entry)
+            existing = self.link_messages.get(message_key)
+            if existing:
+                entry['thread'] = existing.get('thread', [])
+            self.data_store.upsert_entry(entry)
             # Track this message for potential replies
-            self.link_messages[message.message_id] = entry
+            self.link_messages[message_key] = entry
 
             logger.info(f"Saved {len(urls)} URLs from {entry['username']}")
+        elif message_key in self.link_messages:
+            # An edit may remove the last URL. Do not leave stale content in the
+            # feed after Telegram says the source message no longer contains it.
+            self.data_store.delete_entry(base)
+            del self.link_messages[message_key]
+        elif getattr(message, 'edit_date', None):
+            # The edited message may previously have been a directive.
+            self.data_store.delete_entry(base)
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command."""
+        if not self._matches_source(update):
+            return
         await update.message.reply_text("DumpBot is running. I'll collect links from this chat.")
 
     async def stats_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Show collection statistics."""
+        if not self._matches_source(update):
+            return
         stats = self.data_store.get_stats()
         await update.message.reply_text(
             f"📊 Stats:\n"
@@ -142,6 +201,13 @@ class DumpBot:
 
     async def export_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Export collected data and commit to repository."""
+        if not self._matches_source(update):
+            return
+        if not self.config.git_export_enabled:
+            await update.message.reply_text(
+                "Private collection is enabled; GitHub export is disabled."
+            )
+            return
         try:
             all_entries = self.data_store.get_all_entries()
 

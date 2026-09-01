@@ -2,6 +2,8 @@
 
 import json
 import logging
+import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 from typing import Dict, Any, List
@@ -14,7 +16,7 @@ class DataStore:
 
     def __init__(self, data_dir: Path):
         self.data_dir = Path(data_dir)
-        self.data_dir.mkdir(exist_ok=True)
+        self.data_dir.mkdir(parents=True, exist_ok=True)
         self.entries_file = self.data_dir / 'entries.jsonl'
 
     def save_entry(self, entry: Dict[str, Any]) -> None:
@@ -25,38 +27,86 @@ class DataStore:
         except Exception as e:
             logger.error(f"Failed to save entry: {e}")
 
+    @staticmethod
+    def entry_key(entry: Dict[str, Any]) -> tuple[Any, Any, Any]:
+        """Stable Telegram identity, including the source chat and forum topic."""
+        return (
+            entry.get('chat_id'),
+            entry.get('message_thread_id'),
+            entry.get('message_id'),
+        )
+
+    def upsert_entry(self, updated_entry: Dict[str, Any]) -> None:
+        """Insert or replace one Telegram message without retaining edit duplicates."""
+        entries = self.get_all_entries()
+        key = self.entry_key(updated_entry)
+        matches = [index for index, entry in enumerate(entries) if self.entry_key(entry) == key]
+
+        # Entries written before source scoping did not include chat/topic. This
+        # collector historically had one configured chat, so adopt every legacy
+        # version with the same message id and collapse old edit duplicates.
+        if not matches:
+            legacy_matches = [
+                index for index, entry in enumerate(entries)
+                if entry.get('message_id') == updated_entry.get('message_id')
+                and entry.get('chat_id') is None
+                and entry.get('message_thread_id') is None
+            ]
+            if legacy_matches:
+                matches = legacy_matches
+
+        if matches:
+            first = matches[0]
+            existing = entries[first]
+            if 'thread' in existing and 'thread' not in updated_entry:
+                updated_entry['thread'] = existing['thread']
+            entries[first] = updated_entry
+            for index in reversed(matches[1:]):
+                del entries[index]
+        else:
+            entries.append(updated_entry)
+
+        self._write_entries(entries)
+
+    def delete_entry(self, identity: Dict[str, Any]) -> None:
+        """Remove all stored versions of one Telegram message."""
+        key = self.entry_key(identity)
+        message_id = identity.get('message_id')
+        entries = [
+            entry for entry in self.get_all_entries()
+            if self.entry_key(entry) != key
+            and not (
+                entry.get('message_id') == message_id
+                and entry.get('chat_id') is None
+                and entry.get('message_thread_id') is None
+            )
+        ]
+        self._write_entries(entries)
+
+    def _write_entries(self, entries: List[Dict[str, Any]]) -> None:
+        """Atomically replace the JSONL store."""
+        self.data_dir.mkdir(parents=True, exist_ok=True)
+        temp_path = None
+        try:
+            with tempfile.NamedTemporaryFile(
+                'w', encoding='utf-8', dir=self.data_dir, delete=False
+            ) as output:
+                temp_path = Path(output.name)
+                for entry in entries:
+                    output.write(json.dumps(entry, ensure_ascii=False) + '\n')
+                output.flush()
+                os.fsync(output.fileno())
+            os.replace(temp_path, self.entries_file)
+        except Exception as exc:
+            logger.error(f"Failed to rewrite entries: {exc}")
+            if temp_path is not None:
+                temp_path.unlink(missing_ok=True)
+            raise
+
     def update_entry(self, updated_entry: Dict[str, Any]) -> None:
         """Update an existing entry by message_id."""
-        if not self.entries_file.exists():
-            return
-
-        entries = []
-        try:
-            # Read all entries
-            with open(self.entries_file, 'r', encoding='utf-8') as f:
-                for line in f:
-                    if line.strip():
-                        entries.append(json.loads(line))
-
-            # Find and update the entry
-            updated = False
-            for i, entry in enumerate(entries):
-                if entry.get('message_id') == updated_entry.get('message_id'):
-                    entries[i] = updated_entry
-                    updated = True
-                    break
-
-            if updated:
-                # Rewrite the entire file
-                with open(self.entries_file, 'w', encoding='utf-8') as f:
-                    for entry in entries:
-                        f.write(json.dumps(entry, ensure_ascii=False) + '\n')
-                logger.info(f"Updated entry with message_id: {updated_entry.get('message_id')}")
-            else:
-                logger.warning(f"Entry with message_id {updated_entry.get('message_id')} not found")
-
-        except Exception as e:
-            logger.error(f"Failed to update entry: {e}")
+        self.upsert_entry(updated_entry)
+        logger.info(f"Updated entry with message_id: {updated_entry.get('message_id')}")
 
     def get_all_entries(self) -> List[Dict[str, Any]]:
         """Retrieve all stored entries."""

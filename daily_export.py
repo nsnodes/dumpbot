@@ -22,8 +22,11 @@ def daily_export():
     try:
         # Initialize components
         config = Config()
+        if not config.git_export_enabled:
+            logger.info("Git export is disabled for this collection profile")
+            return True
         data_store = DataStore(config.data_output_dir)
-        digest = DigestIntegration()
+        digest = DigestIntegration(config.data_output_dir)
         git_sync = GitSync()
 
         # Get today's date

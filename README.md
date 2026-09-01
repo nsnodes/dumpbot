@@ -76,7 +76,51 @@ Set these environment variables in `.env`:
 
 - `TELEGRAM_BOT_TOKEN` - Your bot token from @BotFather
 - `CHAT_ID` - The chat ID where the bot will collect links
-- `DATA_OUTPUT_DIR` - Directory for data storage (default: `../digest/data/`)
+- `TOPIC_ID` - Optional forum topic ID; when set, all other topics are ignored
+- `DATA_OUTPUT_DIR` - Directory for data storage (default: `data`)
+- `EXPORT_MODE` - `public` for the legacy feed or `private` for a local-only feed
+- `GIT_EXPORT_ENABLED` - Whether `/export` and the daily job may push data
+
+## Steward Dump topic cutover
+
+The replacement destination is [Dump](https://t.me/c/3904448873/311): chat
+`-1003904448873`, topic `311`. `.env.dump-topic.example` is the production
+profile template for that destination.
+
+The cutover profile has deliberately different privacy semantics from the
+legacy DumpBot chat:
+
+- the chat and topic IDs must both match; no other steward topic is collected;
+- raw entries are written beneath `/var/lib/dump-collector`, outside this
+  public checkout;
+- Git export is disabled, and configuration validation refuses to start if the
+  steward Dump topic is configured as public;
+- edits are upserts keyed by `(chat_id, topic_id, message_id)`, including reply
+  edits, so Telegram edits do not become duplicate feed items.
+
+Do not use the steward bot token for this collector: Telegram permits only one
+`getUpdates` poller per token. Add the existing DumpBot bot to the steward forum
+and disable BotFather privacy mode so it can see ordinary Dump-topic messages.
+
+### Cutover order
+
+1. Deploy this release to the legacy collector without changing `.env` and
+   confirm the old public feed still exports.
+2. Add the DumpBot bot to the steward forum, then stage the private profile and
+   `/var/lib/dump-collector` with mode `0700`.
+3. Stop the old-profile service, start the private profile, post and then edit a
+   disposable URL in topic `311`, and verify there is exactly one updated row
+   in the private `entries.jsonl`. Messages in another topic must add no row.
+4. On the AudioSync host set
+   `DUMP_FEED_FILE=/var/lib/dump-collector/entries.jsonl`; it will then read the
+   private file directly and never fall back to GitHub.
+5. Keep the historical public exports for existing consumers. Do not remove the
+   legacy service or repository until Digest has a private authenticated input
+   path and the private collector has completed a full weekly cycle.
+
+Digest currently runs in GitHub Actions and reads the public repository. The
+private Dump topic must not be wired into that job until a private authenticated
+handoff exists; this repository intentionally does not weaken that boundary.
 
 ## Commands
 

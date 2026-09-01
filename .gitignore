@@ -14,6 +14,9 @@ venv/
 data/entries.jsonl
 data/daily-export.log
 
+# Private steward Dump-topic collection must live outside the public checkout.
+private-data/
+
 # Stray local artifacts
 bot.log
 debug.log
