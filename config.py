@@ -7,6 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+
 class Config:
     """Configuration class with environment variable handling."""
 

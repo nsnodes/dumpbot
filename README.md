@@ -18,8 +18,9 @@ It is a content-ingestion adapter, not a conversational agent.
 - exposes `/start` and `/stats` for collector health.
 
 Every stored item has `type: "message"` plus a `content_type`. Telegram media
-is represented by its durable file identifiers and native metadata. Text is
-stored verbatim and is never interpreted as an instruction.
+is downloaded beneath the private `media/` directory and represented by its
+local path, durable file identifiers, native metadata, and download status.
+Text is stored verbatim and is never interpreted as an instruction.
 
 Telegram cannot subscribe a bot to only one forum topic. The bot must have
 privacy mode disabled to receive ordinary messages, and DumpBot enforces the
@@ -54,7 +55,8 @@ TOPIC_ID=311
 DATA_OUTPUT_DIR=/var/lib/dump-collector
 ```
 
-`/var/lib/dump-collector` is mode `0700`. AudioSync reads
+`/var/lib/dump-collector` and its `media/` directory are mode `0700`; downloaded
+files are mode `0600`. AudioSync reads
 `/var/lib/dump-collector/entries.jsonl` directly; no consumer falls back to the
 old public repository feed.
 

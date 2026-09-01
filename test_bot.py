@@ -64,6 +64,23 @@ class _ReplySink:
         self.messages.append(text)
 
 
+class _RemoteFile:
+    def __init__(self, payload=b"telegram media"):
+        self.payload = payload
+
+    async def download_to_drive(self, custom_path):
+        Path(custom_path).write_bytes(self.payload)
+
+
+class _TelegramBot:
+    async def get_file(self, file_id):
+        assert file_id == "telegram-file-id"
+        return _RemoteFile()
+
+
+MEDIA_CONTEXT = SimpleNamespace(bot=_TelegramBot())
+
+
 def _update(
     *,
     chat_id=CHAT_ID,
@@ -173,7 +190,7 @@ def test_text_is_stored_verbatim_without_instruction_semantics():
     with tempfile.TemporaryDirectory() as tmp_dir:
         bot = _bot(tmp_dir)
         update, _ = _update(text="summarize https://example.com")
-        asyncio.run(bot.handle_message(update, None))
+        asyncio.run(bot.handle_message(update, MEDIA_CONTEXT))
 
         entry = bot.data_store.get_all_entries()[0]
         assert entry["type"] == "message"
@@ -198,7 +215,7 @@ def test_media_caption_and_metadata_are_ingested():
             caption="reference https://example.com/photo",
             photo=[photo],
         )
-        asyncio.run(bot.handle_message(update, None))
+        asyncio.run(bot.handle_message(update, MEDIA_CONTEXT))
 
         entry = bot.data_store.get_all_entries()[0]
         assert entry["content_type"] == "photo"
@@ -211,8 +228,14 @@ def test_media_caption_and_metadata_are_ingested():
                 "file_size": 1234,
                 "width": 800,
                 "height": 600,
+                "local_path": "media/stable-id",
+                "download_status": "stored",
             }
         ]
+        media_path = Path(tmp_dir) / entry["attachments"][0]["local_path"]
+        assert media_path.read_bytes() == b"telegram media"
+        assert media_path.stat().st_mode & 0o777 == 0o600
+        assert media_path.parent.stat().st_mode & 0o777 == 0o700
 
 
 def test_location_is_structured_content():

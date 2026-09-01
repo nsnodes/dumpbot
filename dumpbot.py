@@ -1,10 +1,14 @@
 """Ingest content from one private Telegram forum topic."""
 
 import logging
+import mimetypes
+import os
 import re
 from datetime import datetime, timezone
+from pathlib import Path
 
 from telegram import Update
+from telegram.error import TelegramError
 from telegram.ext import (
     Application,
     CommandHandler,
@@ -83,6 +87,48 @@ class DumpBot:
             if value is not None:
                 metadata[field] = value
         return metadata
+
+    @staticmethod
+    def _attachment_suffix(attachment: dict) -> str:
+        """Choose a short safe suffix without trusting a Telegram filename."""
+        suffix = Path(attachment.get("file_name", "")).suffix.lower()
+        if re.fullmatch(r"\.[a-z0-9]{1,10}", suffix):
+            return suffix
+        guessed = mimetypes.guess_extension(attachment.get("mime_type", "")) or ""
+        if re.fullmatch(r"\.[a-z0-9]{1,10}", guessed):
+            return guessed
+        return ""
+
+    async def _persist_attachments(self, attachments: list[dict], context) -> None:
+        """Download Telegram-hosted content into the collector's private store."""
+        if not attachments:
+            return
+
+        media_dir = self.config.data_output_dir / "media"
+        media_dir.mkdir(parents=True, exist_ok=True, mode=0o700)
+        media_dir.chmod(0o700)
+        for attachment in attachments:
+            stable_id = re.sub(r"[^a-zA-Z0-9_-]", "_", attachment["file_unique_id"])
+            filename = f"{stable_id}{self._attachment_suffix(attachment)}"
+            target = media_dir / filename
+            attachment["local_path"] = str(
+                target.relative_to(self.config.data_output_dir)
+            )
+            if target.exists():
+                attachment["download_status"] = "stored"
+                continue
+
+            temporary = media_dir / f".{filename}.part"
+            try:
+                remote_file = await context.bot.get_file(attachment["file_id"])
+                await remote_file.download_to_drive(custom_path=temporary)
+                os.replace(temporary, target)
+                target.chmod(0o600)
+                attachment["download_status"] = "stored"
+            except (OSError, TelegramError):
+                temporary.unlink(missing_ok=True)
+                attachment["download_status"] = "failed"
+                logger.warning("Failed to persist %s attachment", attachment["kind"])
 
     @classmethod
     def _content(cls, message):
@@ -176,6 +222,7 @@ class DumpBot:
             return
 
         content_type, message_text, attachments, content = normalized
+        await self._persist_attachments(attachments, context)
 
         chat_id = update.effective_chat.id
         topic_id = message.message_thread_id
@@ -222,9 +269,7 @@ class DumpBot:
         entry = base | {"thread": self.messages.get(message_key, {}).get("thread", [])}
         self.data_store.upsert_entry(entry)
         self.messages[message_key] = entry
-        logger.info(
-            "Saved %s message with %d URL(s)", content_type, len(entry["urls"])
-        )
+        logger.info("Saved %s message with %d URL(s)", content_type, len(entry["urls"]))
 
     async def start_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Handle /start command."""
