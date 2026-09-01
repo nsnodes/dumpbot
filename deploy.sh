@@ -1,26 +1,18 @@
 #!/bin/bash
-set -e
+set -euo pipefail
 
 echo "🚀 Deploying DumpBot to production..."
 
-# Deploy via git clone/pull on remote server
 ssh nsnodes << 'EOF'
-if [ ! -d ~/dumpbot ]; then
-    echo "Cloning repository..."
-    git clone https://github.com/nsnodes/dumpbot.git ~/dumpbot
-else
-    echo "Pulling latest changes..."
-    cd ~/dumpbot
-    git pull origin main
-fi
-
-cd ~/dumpbot
+set -euo pipefail
+cd /root/dumpbot
+git pull --ff-only origin main
 echo "Installing dependencies with uv..."
 uv sync
-
+uv run python test_bot.py
 echo "Restarting bot service..."
-sudo systemctl restart dumpbot || echo "Service not yet configured"
-
+systemctl restart dumpbot.service
+systemctl is-active dumpbot.service
 echo "✅ Deployment complete!"
 EOF
 

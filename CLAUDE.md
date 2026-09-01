@@ -9,7 +9,3 @@
 - Run the bot: `uv run dumpbot`
 - Run tests: `uv run python test_bot.py`
 - Deploy: `./deploy.sh`
-
-## Integration Notes
-
-This bot feeds into the nsnodes digest pipeline (../digest/) as data to drive claude's narrative.

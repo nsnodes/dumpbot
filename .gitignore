@@ -10,11 +10,8 @@ logs/
 venv/
 .venv/
 
-# Local data store — written constantly by the bot
-data/entries.jsonl
-data/daily-export.log
-
-# Private steward Dump-topic collection must live outside the public checkout.
+# Runtime data is always private and lives outside this checkout.
+data/
 private-data/
 
 # Stray local artifacts
